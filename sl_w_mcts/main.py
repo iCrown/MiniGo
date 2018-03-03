@@ -14,7 +14,7 @@ from load_data_sets import DataSet, parse_data_sets
 
 def gtp(strategy, read_file=None):
     print("====gtp====")
-    n = PolicyNetwork(use_cpu=True)
+    n = PolicyNetwork()
     if strategy == 'random':
         instance = RandomPlayer()
     elif strategy == 'policy':

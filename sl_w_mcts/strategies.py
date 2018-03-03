@@ -2,6 +2,7 @@ import math
 import random
 import sys
 import time
+import copy
 import numpy as np
 import gtp
 
@@ -73,12 +74,18 @@ class GtpInterface(object):
     def make_move(self, color, vertex):
         coords = utils.parse_pygtp_coords(vertex)
         self.accomodate_out_of_turn(color)
-        self.position = self.position.play_move(coords, color=translate_gtp_colors(color))
+        try:
+            self.position = self.position.play_move(coords, color=translate_gtp_colors(color))
+        except:
+            self.position = None
         return self.position is not None
 
     def get_move(self, color):
         self.accomodate_out_of_turn(color)
-        move = self.suggest_move(self.position)
+        try:
+            move = self.suggest_move(self.position)
+        except:
+            move = None
         return utils.unparse_pygtp_coords(move)
 
     def suggest_move(self, position):

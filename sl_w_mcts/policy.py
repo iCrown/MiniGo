@@ -119,7 +119,7 @@ class PolicyNetwork(object):
     def run(self, position):
         'Return a sorted list of (probability, move) tuples'
         processed_position = features.extract_features(position, features=self.features)
-        probabilities = self.session.run(self.output, feed_dict={self.observation_placeholder: processed_position[None, :]})[0]
+        probabilities = self.session.run(self.logits, feed_dict={self.observation_placeholder: processed_position[None, :]})[0]
         return probabilities.reshape([go.N, go.N])
 
     def test(self, test_data):
