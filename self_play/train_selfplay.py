@@ -94,38 +94,55 @@ class PG(object):
         return [pos_next, state, move[0]*go.N+move[1], 0]
     return None
 
-  def sample_path(self, num_episodes = None):
+  def sample_path(self):
     paths = []
     t = 0
     while t < self.batch_size:
-      states, actions, rewards = [], [], []
+      states0, actions0, rewards0 = [], [], []
+      states1, actions1, rewards1 = [], [], []
       pos_cur = go.Position()
+      idx = 0
       while True:
         item= self.step(pos_cur)
         if item == None:
           score = pos_cur.score()
-          if score == 0:
-            rewards[-1]=0
-            rewards[-2]=0
-          elif (score>0 and pos_cur.to_play == go.WHITE) or (score < 0 and pos_cur.to_play == go.BLACK):
-            rewards[-1]=1
-            rewards[-2]=-1
+          if (score>0 and pos_cur.to_play == go.WHITE) or (score < 0 and pos_cur.to_play == go.BLACK):
+            if idx % 2 == 0:
+              rewards0[-1]=-1
+              rewards1[-1]=1
+            else:
+              rewards0[-1]=1
+              rewards1[-1]=-1
           else:
-            rewards[-1]=-1
-            rewards[-2]=1
+            if idx % 2 == 0:
+              rewards0[-1]=1
+              rewards1[-1]=-1
+            else:
+              rewards0[-1]=-1
+              rewards1[-1]=1
           break
         else:
           pos_cur = item[0]
-          states.append(item[1])
-          actions.append(item[2])
-          rewards.append(item[3])        
+          if idx % 2 ==0:
+            states0.append(item[1])
+            actions0.append(item[2])
+            rewards0.append(item[3])
+          else:
+            states1.append(item[1])
+            actions1.append(item[2])
+            rewards1.append(item[3])
+          idx += 1
           t += 1
           if t == self.batch_size:
             break
-      path = {"observation" : np.array(states), 
-                      "reward" : np.array(rewards), 
-                      "action" : np.array(actions)}
-      paths.append(path)  
+      path0 = {"observation" : np.array(states0), 
+                      "reward" : np.array(rewards0), 
+                      "action" : np.array(actions0)}
+      path1 = {"observation" : np.array(states1), 
+                      "reward" : np.array(rewards1), 
+                      "action" : np.array(actions1)}
+      paths.append(path0)
+      paths.append(path1)
     return paths
   
   
