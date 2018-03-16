@@ -18,13 +18,13 @@ class PG(object):
     # store hyper-params
 
     self.use_baseline = True
-    self.normalize_advantage =True
+    self.normalize_advantage =False
     self.batch_size = 4096
     self.num_batches = 10000
     self.checkpoint_freq = 1000
     self.print_freq = 50
     self.lr_decay_step = 200
-    self.gamma = 0.9
+    self.gamma = 0.1
     self.lr = 1e-4
     self.lr_baseline = self.lr * 10
     self.n_input_planes = sum(f.planes for f in features.DEFAULT_FEATURES)
@@ -104,7 +104,10 @@ class PG(object):
         item= self.step(pos_cur)
         if item == None:
           score = pos_cur.score()
-          if (score>0 and pos_cur == go.WHITE) or (score < 0 and pos_cur == go.BLACK):
+          if score == 0:
+            rewards[-1]=0
+            rewards[-2]=0
+          elif (score>0 and pos_cur.to_play == go.WHITE) or (score < 0 and pos_cur.to_play == go.BLACK):
             rewards[-1]=1
             rewards[-2]=-1
           else:
