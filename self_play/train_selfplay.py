@@ -11,22 +11,23 @@ import time
 import features
 import go
 from tqdm import tqdm
+import random
 
 
 class PG(object):
   def __init__(self):            
     # store hyper-params
 
-    self.use_baseline = True
+    self.use_baseline = False
     self.normalize_advantage =False
     self.batch_size = 4096
     self.num_batches = 10000
-    self.checkpoint_freq = 1000
+    self.checkpoint_freq = 2000
     self.print_freq = 50
-    self.lr_decay_step = 200
-    self.gamma = 0.1
-    self.lr = 1e-4
-    self.lr_baseline = self.lr * 10
+    self.lr_decay_step = 2000
+    self.gamma = 1
+    self.lr = 1e-5
+    self.lr_baseline = 1e-4
     self.n_input_planes = sum(f.planes for f in features.DEFAULT_FEATURES)
 
     self.build()
@@ -52,7 +53,7 @@ class PG(object):
   
   def add_optimizer_op(self):
     lr_decay = tf.train.exponential_decay(self.lr, self.global_step, self.lr_decay_step, 0.92, staircase=True)
-    self.train_op = tf.train.AdamOptimizer(learning_rate=lr_decay).minimize(self.loss)
+    self.train_op = tf.train.AdamOptimizer(learning_rate=lr_decay).minimize(self.loss, global_step=self.global_step)
   
   def add_baseline_op(self, scope = "ValueNetwork"):
     with tf.variable_scope(scope, reuse=False):
@@ -77,13 +78,17 @@ class PG(object):
     if self.use_baseline:
       self.add_baseline_op()
 
-  def step(self, pos_cur):
+  def step(self, pos_cur, first):
     state = features.extract_features(pos_cur)
     move_probs = self.sess.run(self.action_logits, feed_dict={self.observation_placeholder: state[None, :]})[0]
     move_probs = move_probs.reshape([go.N, go.N])
     
     coords = [(a, b) for a in range(go.N) for b in range(go.N)]
-    for move in sorted(coords, key=lambda c: move_probs[c], reverse=True):
+    if first == True:
+      random.shuffle(coords)
+    else:
+      coords = sorted(coords, key=lambda c: move_probs[c], reverse=True)
+    for move in coords:
       if go.is_eyeish(pos_cur.board, move):
         continue
       try:
@@ -100,10 +105,11 @@ class PG(object):
     while t < self.batch_size:
       states0, actions0, rewards0 = [], [], []
       states1, actions1, rewards1 = [], [], []
-      pos_cur = go.Position()
+      pos_init = go.Position()
+      pos_cur = self.step(pos_init, True)[0]
       idx = 0
       while True:
-        item= self.step(pos_cur)
+        item= self.step(pos_cur, False)
         if item == None:
           score = pos_cur.score()
           if (score>0 and pos_cur.to_play == go.WHITE) or (score < 0 and pos_cur.to_play == go.BLACK):
@@ -113,7 +119,7 @@ class PG(object):
             else:
               rewards0[-1]=1
               rewards1[-1]=-1
-          else:
+          elif score != 0:
             if idx % 2 == 0:
               rewards0[-1]=1
               rewards1[-1]=-1
@@ -181,15 +187,17 @@ class PG(object):
 
   def train(self, save_dir):
     for t in tqdm(range(self.num_batches)):
-  
       # collect a minibatch of samples
-      paths = self.sample_path() 
-      observations = np.concatenate([path["observation"] for path in paths])
-      actions = np.concatenate([path["action"] for path in paths])
-      rewards = np.concatenate([path["reward"] for path in paths])
-      # compute Q-val estimates (discounted future returns) for each time step
-      returns = self.get_returns(paths)
-      advantages = self.calculate_advantage(returns, observations)
+      paths = self.sample_path()
+      try:
+        observations = np.concatenate([path["observation"] for path in paths])
+        actions = np.concatenate([path["action"] for path in paths])
+        rewards = np.concatenate([path["reward"] for path in paths])
+        # compute Q-val estimates (discounted future returns) for each time step
+        returns = self.get_returns(paths)
+        advantages = self.calculate_advantage(returns, observations)
+      except:
+        continue
 
       # run training operations
       if self.use_baseline:
@@ -210,7 +218,8 @@ class PG(object):
   def initialize(self, logdir, checkpoint=None):
     self.sess = tf.Session()
     self.saver_policy = tf.train.Saver(var_list=tf.get_collection(tf.GraphKeys.GLOBAL_VARIABLES, scope="PolicNetwork"))
-    self.saver_value = tf.train.Saver(var_list=tf.get_collection(tf.GraphKeys.GLOBAL_VARIABLES, scope="ValueNetwork"))
+    if self.use_baseline:
+      self.saver_value = tf.train.Saver(var_list=tf.get_collection(tf.GraphKeys.GLOBAL_VARIABLES, scope="ValueNetwork"))
     init = tf.global_variables_initializer()
     self.sess.run(init)
     if checkpoint is not None:
@@ -220,7 +229,8 @@ class PG(object):
   def save_variables(self, save_dir, t):
     print("Saving checkpoint %d" % t, file=sys.stderr)
     self.saver_policy.save(self.sess, os.path.join(save_dir, "batch_"+str(t)+"_policy.ckpt"))
-    self.saver_value.save(self.sess, os.path.join(save_dir, "batch_"+str(t)+"_value.ckpt"))
+    if self.use_baseline:
+      self.saver_value.save(self.sess, os.path.join(save_dir, "batch_"+str(t)+"_value.ckpt"))
 
   def run(self, save_dir, logdir, checkpoint=None):
     if not os.path.exists(save_dir):
