@@ -44,7 +44,8 @@ class PolicyNetwork(object):
 
         self.session = tf.Session()
         self.build()
-        self.saver = tf.train.Saver()
+        self.saver = tf.train.Saver(var_list=tf.get_collection(tf.GraphKeys.GLOBAL_VARIABLES, scope="PolicNetwork"))
+#         self.saver = tf.train.Saver()
         self.initialize_variables(read_file)
         self.initialize_logging(logdir)
 
