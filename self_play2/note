@@ -1,0 +1,5 @@
+python3 main.py preprocess selfplayed_data
+python3 main.py train 
+
+# before run reinforce, need to manually convert sl model to the new scope and save in model/rl folder, along with the checkpoint file
+python3 main.py reinforce

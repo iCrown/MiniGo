@@ -1,0 +1,1 @@
+../gogui-1.4.9/bin/gogui-twogtp -black 'python main.py gtp policy model/rl/52/player52.ckpt PlayerNetwork' -white '../gogui-1.4.9/bin/gogui-display' -size 9 -komi 7.5 -verbose -auto
