@@ -18,16 +18,17 @@ class PG(object):
   def __init__(self):            
     # store hyper-params
 
-    self.use_baseline = False
-    self.normalize_advantage =False
+    self.use_baseline = True
+    self.normalize_advantage =True
     self.batch_size = 4096
     self.num_batches = 10000
-    self.checkpoint_freq = 2000
+    self.checkpoint_freq = 1000
     self.print_freq = 50
-    self.lr_decay_step = 2000
+    self.lr_decay_step = 200
     self.gamma = 1
-    self.lr = 1e-5
-    self.lr_baseline = 1e-4
+    self.lr = 1e-4
+    self.lr_baseline = 1e-3
+    self.eps_begin = 0.2
     self.n_input_planes = sum(f.planes for f in features.DEFAULT_FEATURES)
 
     self.build()
@@ -78,13 +79,13 @@ class PG(object):
     if self.use_baseline:
       self.add_baseline_op()
 
-  def step(self, pos_cur, first):
+  def step(self, pos_cur, epsilon):
     state = features.extract_features(pos_cur)
     move_probs = self.sess.run(self.action_logits, feed_dict={self.observation_placeholder: state[None, :]})[0]
     move_probs = move_probs.reshape([go.N, go.N])
     
     coords = [(a, b) for a in range(go.N) for b in range(go.N)]
-    if first == True:
+    if random.random() < epsilon :
       random.shuffle(coords)
     else:
       coords = sorted(coords, key=lambda c: move_probs[c], reverse=True)
@@ -99,17 +100,16 @@ class PG(object):
         return [pos_next, state, move[0]*go.N+move[1], 0]
     return None
 
-  def sample_path(self):
+  def sample_path(self, epsilon):
     paths = []
     t = 0
     while t < self.batch_size:
       states0, actions0, rewards0 = [], [], []
       states1, actions1, rewards1 = [], [], []
-      pos_init = go.Position()
-      pos_cur = self.step(pos_init, True)[0]
+      pos_cur = go.Position()
       idx = 0
       while True:
-        item= self.step(pos_cur, False)
+        item= self.step(pos_cur, epsilon)
         if item == None:
           score = pos_cur.score()
           if (score>0 and pos_cur.to_play == go.WHITE) or (score < 0 and pos_cur.to_play == go.BLACK):
@@ -186,9 +186,11 @@ class PG(object):
                   self.baseline_target_placeholder: returns})
 
   def train(self, save_dir):
+    eps_step = float(0 - self.eps_begin) / self.num_batches
     for t in tqdm(range(self.num_batches)):
+      epsilon = self.eps_begin + t * eps_step
       # collect a minibatch of samples
-      paths = self.sample_path()
+      paths = self.sample_path(epsilon)
       try:
         observations = np.concatenate([path["observation"] for path in paths])
         actions = np.concatenate([path["action"] for path in paths])
